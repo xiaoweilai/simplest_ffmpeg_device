@@ -8,8 +8,8 @@ SOURCES += \
 INCLUDEPATH +=./include
 
 
-LIBS += ./lib/SDL.lib
-LIBS += ./lib/SDLmain.lib
+LIBS += -L./lib -lSDL.dll
+LIBS += -L./lib -lSDLmain
 LIBS += ./lib/avcodec.lib
 LIBS += ./lib/avdevice.lib
 LIBS += ./lib/avfilter.lib

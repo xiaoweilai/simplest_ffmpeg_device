@@ -29,6 +29,7 @@
 
 
 #include <stdio.h>
+#include <windows.h>
 
 #define __STDC_CONSTANT_MACROS
 
@@ -59,10 +60,10 @@ extern "C"
 #endif
 
 //Output YUV420P 
-#define OUTPUT_YUV420P 0
+#define OUTPUT_YUV420P 1
 //'1' Use Dshow 
 //'0' Use GDIgrab
-#define USE_DSHOW 0
+#define USE_DSHOW 1
 
 //Refresh Event
 #define SFM_REFRESH_EVENT  (SDL_USEREVENT + 1)
@@ -71,13 +72,13 @@ int thread_exit=0;
 
 int sfp_refresh_thread(void *opaque)
 {
-	while (thread_exit==0) {
-		SDL_Event event;
-		event.type = SFM_REFRESH_EVENT;
-		SDL_PushEvent(&event);
-		SDL_Delay(40);
-	}
-	return 0;
+    while (thread_exit==0) {
+        SDL_Event event;
+        event.type = SFM_REFRESH_EVENT;
+        SDL_PushEvent(&event);
+        SDL_Delay(40);
+    }
+    return 0;
 }
 
 //Show Dshow Device
@@ -103,8 +104,8 @@ void show_avfoundation_device(){
 }
 
 
-
-int main(int argc, char* argv[])
+int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
+//int main(int argc, char* argv[])
 {
 
 	AVFormatContext	*pFormatCtx;
@@ -218,29 +219,29 @@ int main(int argc, char* argv[])
 	//uint8_t *out_buffer=(uint8_t *)av_malloc(avpicture_get_size(PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height));
 	//avpicture_fill((AVPicture *)pFrameYUV, out_buffer, PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height);
 	//SDL----------------------------
-	if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {  
-		printf( "Could not initialize SDL - %s\n", SDL_GetError()); 
-		return -1;
-	} 
+    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+        printf( "Could not initialize SDL - %s\n", SDL_GetError());
+        return -1;
+    }
 	int screen_w=640,screen_h=360;
-	const SDL_VideoInfo *vi = SDL_GetVideoInfo();
-	//Half of the Desktop's width and height.
-	screen_w = vi->current_w/2;
-	screen_h = vi->current_h/2;
-	SDL_Surface *screen; 
-	screen = SDL_SetVideoMode(screen_w, screen_h, 0,0);
+    const SDL_VideoInfo *vi = SDL_GetVideoInfo();
+    //Half of the Desktop's width and height.
+    screen_w = vi->current_w/2;
+    screen_h = vi->current_h/2;
+    SDL_Surface *screen;
+    screen = SDL_SetVideoMode(screen_w, screen_h, 0,0);
 
-	if(!screen) {  
-		printf("SDL: could not set video mode - exiting:%s\n",SDL_GetError());  
-		return -1;
-	}
-	SDL_Overlay *bmp; 
-	bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen); 
-	SDL_Rect rect;
-	rect.x = 0;    
-	rect.y = 0;    
-	rect.w = screen_w;    
-	rect.h = screen_h;  
+    if(!screen) {
+        printf("SDL: could not set video mode - exiting:%s\n",SDL_GetError());
+        return -1;
+    }
+    SDL_Overlay *bmp;
+    bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen);
+    SDL_Rect rect;
+    rect.x = 0;
+    rect.y = 0;
+    rect.w = screen_w;
+    rect.h = screen_h;
 	//SDL End------------------------
 	int ret, got_picture;
 
@@ -252,17 +253,17 @@ int main(int argc, char* argv[])
 
 	struct SwsContext *img_convert_ctx;
 	img_convert_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt, pCodecCtx->width, pCodecCtx->height, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
-	//------------------------------
-	SDL_Thread *video_tid = SDL_CreateThread(sfp_refresh_thread,NULL);
-	//
-	SDL_WM_SetCaption("Simplest FFmpeg Grab Desktop",NULL);
-	//Event Loop
-	SDL_Event event;
+    //------------------------------
+    SDL_Thread *video_tid = SDL_CreateThread(sfp_refresh_thread,NULL);
+    //
+    SDL_WM_SetCaption("Simplest FFmpeg Grab Desktop",NULL);
+    //Event Loop
+    SDL_Event event;
 
 	for (;;) {
 		//Wait
-		SDL_WaitEvent(&event);
-		if(event.type==SFM_REFRESH_EVENT){
+        SDL_WaitEvent(&event);
+        if(event.type==SFM_REFRESH_EVENT){
 			//------------------------------
 			if(av_read_frame(pFormatCtx, packet)>=0){
 				if(packet->stream_index==videoindex){
