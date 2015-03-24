@@ -109,7 +109,7 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 {
 
 	AVFormatContext	*pFormatCtx;
-	int				i, videoindex;
+    int				i=0, videoindex;
 	AVCodecContext	*pCodecCtx;
 	AVCodec			*pCodec;
 	
@@ -201,6 +201,7 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 		printf("Didn't find a video stream.\n");
 		return -1;
 	}
+//    pFormatCtx->streams[videoindex]->codec->codec_id = AV_CODEC_ID_H264;
 	pCodecCtx=pFormatCtx->streams[videoindex]->codec;
 	pCodec=avcodec_find_decoder(pCodecCtx->codec_id);
 	if(pCodec==NULL)
@@ -216,8 +217,8 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 	AVFrame	*pFrame,*pFrameYUV;
 	pFrame=av_frame_alloc();
 	pFrameYUV=av_frame_alloc();
-	//uint8_t *out_buffer=(uint8_t *)av_malloc(avpicture_get_size(PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height));
-	//avpicture_fill((AVPicture *)pFrameYUV, out_buffer, PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height);
+    uint8_t *out_buffer=(uint8_t *)av_malloc(avpicture_get_size(PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height));
+    avpicture_fill((AVPicture *)pFrameYUV, out_buffer, PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height);
 	//SDL----------------------------
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
         printf( "Could not initialize SDL - %s\n", SDL_GetError());
@@ -235,8 +236,8 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
         printf("SDL: could not set video mode - exiting:%s\n",SDL_GetError());
         return -1;
     }
-    SDL_Overlay *bmp;
-    bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen);
+//    SDL_Overlay *bmp;
+//    bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen);
     SDL_Rect rect;
     rect.x = 0;
     rect.y = 0;
@@ -248,7 +249,7 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 	AVPacket *packet=(AVPacket *)av_malloc(sizeof(AVPacket));
 
 #if OUTPUT_YUV420P 
-    FILE *fp_yuv=fopen("output.yuv","wb+");  
+    FILE *fp_yuv=fopen("output.yuv.mp4","wb+");
 #endif  
 
 	struct SwsContext *img_convert_ctx;
@@ -267,7 +268,8 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 			//------------------------------
 			if(av_read_frame(pFormatCtx, packet)>=0){
 				if(packet->stream_index==videoindex){
-					ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
+#if 0//org
+                    ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
 					if(ret < 0){
 						printf("Decode Error.\n");
 						return -1;
@@ -293,8 +295,48 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 						SDL_DisplayYUVOverlay(bmp, &rect); 
 
 					}
+#else
+
+                    SDL_Overlay *bmp;
+                    bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen);
+
+
+                    /* encode the image */
+                    ret = avcodec_encode_video2(pCodecCtx, packet,pFrame, &got_picture);
+                    if (ret < 0)
+                    {
+                        printf("Error encoding frame\n");
+                        return -1;
+                    }
+                    if(got_picture){
+                        printf("Write frame %3d (size=%5d)\n", i, packet->size);
+
+                        SDL_LockYUVOverlay(bmp);
+//                        pFrameYUV->data[0]=bmp->pixels[0];
+//                        pFrameYUV->data[1]=bmp->pixels[2];
+//                        pFrameYUV->data[2]=bmp->pixels[1];
+//                        pFrameYUV->linesize[0]=bmp->pitches[0];
+//                        pFrameYUV->linesize[1]=bmp->pitches[2];
+//                        pFrameYUV->linesize[2]=bmp->pitches[1];
+//                        sws_scale(img_convert_ctx, (const uint8_t* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameYUV->data, pFrameYUV->linesize);
+
+#if OUTPUT_YUV420P
+//                        int y_size=pCodecCtx->width*pCodecCtx->height;
+//                        fwrite(pFrameYUV->data[0],1,y_size,fp_yuv);    //Y
+//                        fwrite(pFrameYUV->data[1],1,y_size/4,fp_yuv);  //U
+//                        fwrite(pFrameYUV->data[2],1,y_size/4,fp_yuv);  //V
+
+                        fwrite(packet->data, 1, packet->size, fp_yuv);
+                        fflush(fp_yuv);
+#endif
+                        SDL_UnlockYUVOverlay(bmp);
+
+                        SDL_DisplayYUVOverlay(bmp, &rect);
+
+                    }
+#endif
 				}
-				av_free_packet(packet);
+
 			}else{
 				//Exit Thread
 				thread_exit=1;
@@ -304,7 +346,7 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 			thread_exit=1;
 			break;
 		}
-
+        i++;
 	}
 
 
@@ -316,7 +358,8 @@ int WINAPI WinMain(HINSTANCE hinstExe, HINSTANCE, PSTR pszCmdLine, int)
 
 	SDL_Quit();
 
-	//av_free(out_buffer);
+    av_free_packet(packet);
+    av_free(out_buffer);
 	av_free(pFrameYUV);
 	avcodec_close(pCodecCtx);
 	avformat_close_input(&pFormatCtx);
