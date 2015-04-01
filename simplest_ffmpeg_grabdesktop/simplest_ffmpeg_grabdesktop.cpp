@@ -59,7 +59,7 @@ extern "C"
 #endif
 
 //Output YUV420P 
-#define OUTPUT_YUV420P 0
+#define OUTPUT_YUV420P 1
 //'1' Use Dshow 
 //'0' Use GDIgrab
 #define USE_DSHOW 0
@@ -114,6 +114,7 @@ int main(int argc, char* argv[])
 	
 	av_register_all();
 	avformat_network_init();
+	avcodec_register_all();
 	pFormatCtx = avformat_alloc_context();
 	
 	//Open File
@@ -148,7 +149,14 @@ int main(int argc, char* argv[])
 	//av_dict_set(&options,"offset_y","40",0);
 	//Video frame size. The default is to capture the full screen
 	//av_dict_set(&options,"video_size","640x480",0);
-	AVInputFormat *ifmt=av_find_input_format("gdigrab");
+	AVInputFormat *ifmt=av_find_input_format("gdigrab");//格式
+	/* avformat_open_input：
+	func: open an input stream and read the header.The Codecs are not opened.The stream must be closed with avformat_close_input()
+	para show:
+	1. pFormatCtx : pointer to user-supplied AVFormatContext(allocated by avformat_alloc_context).
+	2."desktop"   : Name of the stream to open.输入流
+	3.ifmt        : If non-NULL, forces a specific input format.otherwise the format is autodetected-->(format)格式
+	*/
 	if(avformat_open_input(&pFormatCtx,"desktop",ifmt,&options)!=0){
 		printf("Couldn't open input stream.\n");
 		return -1;
@@ -182,7 +190,12 @@ int main(int argc, char* argv[])
         return -1;
     }
 #endif
-
+	/*avformat_find_stream_info
+	func: read packets of a media file to get stream infomation.
+	param:
+	1.pFormatCtx : media file handle
+	2.options : If non-NULL,an
+	*/
 	if(avformat_find_stream_info(pFormatCtx,NULL)<0)
 	{
 		printf("Couldn't find stream information.\n");
@@ -222,13 +235,21 @@ int main(int argc, char* argv[])
 		printf( "Could not initialize SDL - %s\n", SDL_GetError()); 
 		return -1;
 	} 
-	int screen_w=640,screen_h=360;
+	int screen_w=1366,screen_h=768;
 	const SDL_VideoInfo *vi = SDL_GetVideoInfo();
+#if 1
 	//Half of the Desktop's width and height.
 	screen_w = vi->current_w/2;
 	screen_h = vi->current_h/2;
+#else
+	//the Desktop's width and height.
+	screen_w = vi->current_w;
+	screen_h = vi->current_h;
+#endif
 	SDL_Surface *screen; 
 	screen = SDL_SetVideoMode(screen_w, screen_h, 0,0);
+
+	printf("screen_w:%d,screen_h:%d\n",screen_w,screen_h);
 
 	if(!screen) {  
 		printf("SDL: could not set video mode - exiting:%s\n",SDL_GetError());  
@@ -246,6 +267,7 @@ int main(int argc, char* argv[])
 
 	AVPacket *packet=(AVPacket *)av_malloc(sizeof(AVPacket));
 
+	printf("sizeof(AVPacket): %d\n",   sizeof(AVPacket));
 #if OUTPUT_YUV420P 
     FILE *fp_yuv=fopen("output.yuv","wb+");  
 #endif  
@@ -258,19 +280,33 @@ int main(int argc, char* argv[])
 	SDL_WM_SetCaption("Simplest FFmpeg Grab Desktop",NULL);
 	//Event Loop
 	SDL_Event event;
+	int execcount = 0;
+	int pktnum = 0;
 
 	for (;;) {
 		//Wait
 		SDL_WaitEvent(&event);
 		if(event.type==SFM_REFRESH_EVENT){
 			//------------------------------
+			printf("->>>>>>>>>count:%d\n",execcount++);
 			if(av_read_frame(pFormatCtx, packet)>=0){
 				if(packet->stream_index==videoindex){
+					printf("->>>>>>>>>pktnum:%d\n",pktnum++);
 					ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
 					if(ret < 0){
 						printf("Decode Error.\n");
 						return -1;
 					}
+
+					{
+
+
+
+
+
+					}
+
+
 					if(got_picture){
 						SDL_LockYUVOverlay(bmp);
 						pFrameYUV->data[0]=bmp->pixels[0];
@@ -280,13 +316,13 @@ int main(int argc, char* argv[])
 						pFrameYUV->linesize[1]=bmp->pitches[2];   
 						pFrameYUV->linesize[2]=bmp->pitches[1];
 						sws_scale(img_convert_ctx, (const uint8_t* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameYUV->data, pFrameYUV->linesize);
-
-#if OUTPUT_YUV420P  
-						int y_size=pCodecCtx->width*pCodecCtx->height;    
-						fwrite(pFrameYUV->data[0],1,y_size,fp_yuv);    //Y   
-						fwrite(pFrameYUV->data[1],1,y_size/4,fp_yuv);  //U  
-						fwrite(pFrameYUV->data[2],1,y_size/4,fp_yuv);  //V  
-#endif  
+//
+//#if OUTPUT_YUV420P  
+//						int y_size=pCodecCtx->width*pCodecCtx->height;    
+//						fwrite(pFrameYUV->data[0],1,y_size,fp_yuv);    //Y   
+//						fwrite(pFrameYUV->data[1],1,y_size/4,fp_yuv);  //U  
+//						fwrite(pFrameYUV->data[2],1,y_size/4,fp_yuv);  //V  
+//#endif  
 						SDL_UnlockYUVOverlay(bmp); 
 						
 						SDL_DisplayYUVOverlay(bmp, &rect); 
