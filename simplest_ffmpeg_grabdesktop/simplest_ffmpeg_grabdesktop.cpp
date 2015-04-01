@@ -40,6 +40,13 @@ extern "C"
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
 #include "libavdevice/avdevice.h"
+#include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/common.h>
+#include <libavutil/imgutils.h>
+#include <libavutil/mathematics.h>
+#include <libavutil/samplefmt.h>
 #include "SDL/SDL.h"
 };
 #else
@@ -66,6 +73,12 @@ extern "C"
 
 //Refresh Event
 #define SFM_REFRESH_EVENT  (SDL_USEREVENT + 1)
+
+
+//#define ORGSRC
+#define DESK_WIDTH  (1366)
+#define DESK_HEIGHT (768)
+
 
 int thread_exit=0;
 
@@ -108,21 +121,95 @@ int main(int argc, char* argv[])
 {
 
 	AVFormatContext	*pFormatCtx;
-	int				i, videoindex;
-	AVCodecContext	*pCodecCtx;
-	AVCodec			*pCodec;
+	int				i=0,ret,got_picture, videoindex;
+	AVCodecContext	*c;
+	AVCodec			*codec;
+	AVPacket *pkt;
+	AVFrame	*frame,*pFrameYUV;
+	FILE* f;
 	
 	av_register_all();
 	avformat_network_init();
+	//Register Device
+	avdevice_register_all();
 	avcodec_register_all();
+	c= NULL;
 	pFormatCtx = avformat_alloc_context();
-	
+	pkt=(AVPacket *)av_malloc(sizeof(AVPacket));
+	//pkt = new AVPacket;
+
+	printf("sizeof(AVPacket): %d\n",   sizeof(AVPacket));
 	//Open File
 	//char filepath[]="src01_480x272_22.h265";
 	//avformat_open_input(&pFormatCtx,filepath,NULL,NULL)
 
-	//Register Device
-	avdevice_register_all();
+
+
+	codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+
+    if (codec == 0)
+    {
+        printf("find encoder failed\n");
+        exit(1);
+    }
+
+	c = avcodec_alloc_context3(codec);
+    if (!c)
+    {
+        printf("alloc context failed\n");
+        exit(1);
+    }
+
+	 //    c->bit_rate = 400000;
+    c->width = DESK_WIDTH;
+    c->height = DESK_HEIGHT;
+    //c->time_base = (AVRational){1, 25};//num,den
+    c->gop_size = 20;
+    c->max_b_frames = 1;
+    c->pix_fmt = AV_PIX_FMT_YUV420P;
+    /* frames per second */
+	c->time_base.num = 1;
+    c->time_base.den = 25;
+    
+	int re = avcodec_open2(c, codec, NULL);
+    if (re < 0)
+    {
+        printf("open codec failed\n");
+        exit(1);
+    }
+
+	f = fopen("test.mpg", "wb");
+    if (!f)
+    {
+        printf("open output file failed\n");
+        exit(1);
+    }
+
+
+	frame = av_frame_alloc();
+    if (!frame)
+    {
+        printf("Could not allocate video frame\n");
+        exit(1);
+    }
+
+	frame->format = c->pix_fmt;
+    frame->width  = c->width;
+    frame->height = c->height;
+    /* the image can be allocated by any means and av_image_alloc() is
+     * just the most convenient way if av_malloc() is to be used */
+    ret = av_image_alloc(frame->data, frame->linesize, c->width, c->height, c->pix_fmt, 32);
+    if (ret < 0)
+    {
+        printf("Could not allocate raw picture buffer\n");
+        exit(1);
+    }
+
+
+
+
+
+
 	//Windows
 #ifdef _WIN32
 #if USE_DSHOW
@@ -213,23 +300,23 @@ int main(int argc, char* argv[])
 		printf("Didn't find a video stream.\n");
 		return -1;
 	}
-	pCodecCtx=pFormatCtx->streams[videoindex]->codec;
-	pCodec=avcodec_find_decoder(pCodecCtx->codec_id);
-	if(pCodec==NULL)
+	c=pFormatCtx->streams[videoindex]->codec;
+	codec=avcodec_find_decoder(c->codec_id);
+	if(codec==NULL)
 	{
 		printf("Codec not found.\n");
 		return -1;
 	}
-	if(avcodec_open2(pCodecCtx, pCodec,NULL)<0)
+	if(avcodec_open2(c, codec,NULL)<0)
 	{
 		printf("Could not open codec.\n");
 		return -1;
 	}
-	AVFrame	*pFrame,*pFrameYUV;
-	pFrame=av_frame_alloc();
+	
+	frame=av_frame_alloc();
 	pFrameYUV=av_frame_alloc();
-	//uint8_t *out_buffer=(uint8_t *)av_malloc(avpicture_get_size(PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height));
-	//avpicture_fill((AVPicture *)pFrameYUV, out_buffer, PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height);
+	//uint8_t *out_buffer=(uint8_t *)av_malloc(avpicture_get_size(PIX_FMT_YUV420P, c->width, c->height));
+	//avpicture_fill((AVPicture *)pFrameYUV, out_buffer, PIX_FMT_YUV420P, c->width, c->height);
 	//SDL----------------------------
 	if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {  
 		printf( "Could not initialize SDL - %s\n", SDL_GetError()); 
@@ -256,24 +343,22 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 	SDL_Overlay *bmp; 
-	bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen); 
+	bmp = SDL_CreateYUVOverlay(c->width, c->height,SDL_YV12_OVERLAY, screen); 
 	SDL_Rect rect;
 	rect.x = 0;    
 	rect.y = 0;    
 	rect.w = screen_w;    
 	rect.h = screen_h;  
 	//SDL End------------------------
-	int ret, got_picture;
 
-	AVPacket *packet=(AVPacket *)av_malloc(sizeof(AVPacket));
 
-	printf("sizeof(AVPacket): %d\n",   sizeof(AVPacket));
+
 #if OUTPUT_YUV420P 
     FILE *fp_yuv=fopen("output.yuv","wb+");  
 #endif  
 
 	struct SwsContext *img_convert_ctx;
-	img_convert_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt, pCodecCtx->width, pCodecCtx->height, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
+	img_convert_ctx = sws_getContext(c->width, c->height, c->pix_fmt, c->width, c->height, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
 	//------------------------------
 	SDL_Thread *video_tid = SDL_CreateThread(sfp_refresh_thread,NULL);
 	//
@@ -289,10 +374,10 @@ int main(int argc, char* argv[])
 		if(event.type==SFM_REFRESH_EVENT){
 			//------------------------------
 			printf("->>>>>>>>>count:%d\n",execcount++);
-			if(av_read_frame(pFormatCtx, packet)>=0){
-				if(packet->stream_index==videoindex){
+			if(av_read_frame(pFormatCtx, pkt)>=0){
+				if(pkt->stream_index==videoindex){
 					printf("->>>>>>>>>pktnum:%d\n",pktnum++);
-					ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
+					ret = avcodec_decode_video2(c, frame, &got_picture, pkt);
 					if(ret < 0){
 						printf("Decode Error.\n");
 						return -1;
@@ -315,10 +400,10 @@ int main(int argc, char* argv[])
 						pFrameYUV->linesize[0]=bmp->pitches[0];
 						pFrameYUV->linesize[1]=bmp->pitches[2];   
 						pFrameYUV->linesize[2]=bmp->pitches[1];
-						sws_scale(img_convert_ctx, (const uint8_t* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameYUV->data, pFrameYUV->linesize);
+						sws_scale(img_convert_ctx, (const uint8_t* const*)frame->data, frame->linesize, 0, c->height, pFrameYUV->data, pFrameYUV->linesize);
 //
 //#if OUTPUT_YUV420P  
-//						int y_size=pCodecCtx->width*pCodecCtx->height;    
+//						int y_size=c->width*c->height;    
 //						fwrite(pFrameYUV->data[0],1,y_size,fp_yuv);    //Y   
 //						fwrite(pFrameYUV->data[1],1,y_size/4,fp_yuv);  //U  
 //						fwrite(pFrameYUV->data[2],1,y_size/4,fp_yuv);  //V  
@@ -329,7 +414,7 @@ int main(int argc, char* argv[])
 
 					}
 				}
-				av_free_packet(packet);
+				av_free_packet(pkt);
 			}else{
 				//Exit Thread
 				thread_exit=1;
@@ -353,7 +438,8 @@ int main(int argc, char* argv[])
 
 	//av_free(out_buffer);
 	av_free(pFrameYUV);
-	avcodec_close(pCodecCtx);
+	av_free(frame);
+	avcodec_close(c);
 	avformat_close_input(&pFormatCtx);
 
 	return 0;
