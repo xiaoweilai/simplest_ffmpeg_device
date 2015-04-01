@@ -122,10 +122,10 @@ int main(int argc, char* argv[])
 
 	AVFormatContext	*pFormatCtx;
 	int				i=0,ret,got_output,got_picture, videoindex;
-	AVCodecContext	*Ec,*Dc;
-	AVCodec			*Ecodec,*Dcodec;
+	AVCodecContext	*pEc,*pDc;
+	AVCodec			*pEcodec,*pDcodec;
 	AVPacket *pkt;
-	AVFrame	*Eframe,*Dframe,*DFrameYUV;
+	AVFrame	*pEframe,*pDframe,*pDFrameYUV;
 	FILE* f;
 	
 	av_register_all();
@@ -133,8 +133,8 @@ int main(int argc, char* argv[])
 	//Register Device
 	avdevice_register_all();
 	avcodec_register_all();
-	Ec= NULL;
-	Dc= NULL;
+	pEc= NULL;
+	pDc= NULL;
 	pFormatCtx = avformat_alloc_context();
 	pkt=(AVPacket *)av_malloc(sizeof(AVPacket));
 	//pkt = new AVPacket;
@@ -146,33 +146,33 @@ int main(int argc, char* argv[])
 
 
 
-	Ecodec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	pEcodec = avcodec_find_encoder(AV_CODEC_ID_H264);
 
-    if (Ecodec == 0)
+    if (pEcodec == 0)
     {
         printf("find encoder failed\n");
         exit(1);
     }
 
-	Ec = avcodec_alloc_context3(Ecodec);
-    if (!Ec)
+	pEc = avcodec_alloc_context3(pEcodec);
+    if (!pEc)
     {
         printf("alloc context failed\n");
         exit(1);
     }
 
 	 //    c->bit_rate = 400000;
-    Ec->width = DESK_WIDTH;
-    Ec->height = DESK_HEIGHT;
+    pEc->width = DESK_WIDTH;
+    pEc->height = DESK_HEIGHT;
     //c->time_base = (AVRational){1, 25};//num,den
-    Ec->gop_size = 20;
-    Ec->max_b_frames = 1;
-    Ec->pix_fmt = AV_PIX_FMT_YUV420P;
+    pEc->gop_size = 20;
+    pEc->max_b_frames = 1;
+    pEc->pix_fmt = AV_PIX_FMT_YUV420P;
     /* frames per second */
-	Ec->time_base.num = 1;
-    Ec->time_base.den = 25;
+	pEc->time_base.num = 1;
+    pEc->time_base.den = 10;
     
-	int re = avcodec_open2(Ec, Ecodec, NULL);
+	int re = avcodec_open2(pEc, pEcodec, NULL);
     if (re < 0)
     {
         printf("open codec failed\n");
@@ -187,19 +187,19 @@ int main(int argc, char* argv[])
     }
 
 
-	Eframe = av_frame_alloc();
-    if (!Eframe)
+	pEframe = av_frame_alloc();
+    if (!pEframe)
     {
         printf("Could not allocate video frame\n");
         exit(1);
     }
 
-	Eframe->format = Ec->pix_fmt;
-    Eframe->width  = Ec->width;
-    Eframe->height = Ec->height;
+	pEframe->format = pEc->pix_fmt;
+    pEframe->width  = pEc->width;
+    pEframe->height = pEc->height;
     /* the image can be allocated by any means and av_image_alloc() is
      * just the most convenient way if av_malloc() is to be used */
-    ret = av_image_alloc(Eframe->data, Eframe->linesize, Ec->width, Ec->height, Ec->pix_fmt, 32);
+    ret = av_image_alloc(pEframe->data, pEframe->linesize, pEc->width, pEc->height, pEc->pix_fmt, 32);
     if (ret < 0)
     {
         printf("Could not allocate raw picture buffer\n");
@@ -301,21 +301,21 @@ int main(int argc, char* argv[])
 		printf("Didn't find a video stream.\n");
 		return -1;
 	}
-	Dc=pFormatCtx->streams[videoindex]->codec;
-	Dcodec=avcodec_find_decoder(Dc->codec_id);
-	if(Dcodec==NULL)
+	pDc=pFormatCtx->streams[videoindex]->codec;
+	pDcodec=avcodec_find_decoder(pDc->codec_id);
+	if(pDcodec==NULL)
 	{
 		printf("Codec not found.\n");
 		return -1;
 	}
-	if(avcodec_open2(Dc, Dcodec,NULL)<0)
+	if(avcodec_open2(pDc, pDcodec,NULL)<0)
 	{
 		printf("Could not open codec.\n");
 		return -1;
 	}
 	
-	Dframe=av_frame_alloc();
-	DFrameYUV=av_frame_alloc();
+	pDframe=av_frame_alloc();
+	pDFrameYUV=av_frame_alloc();
 	//uint8_t *out_buffer=(uint8_t *)av_malloc(avpicture_get_size(PIX_FMT_YUV420P, c->width, c->height));
 	//avpicture_fill((AVPicture *)pFrameYUV, out_buffer, PIX_FMT_YUV420P, c->width, c->height);
 	//SDL----------------------------
@@ -344,7 +344,7 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 	SDL_Overlay *bmp; 
-	bmp = SDL_CreateYUVOverlay(Dc->width, Dc->height,SDL_YV12_OVERLAY, screen); 
+	bmp = SDL_CreateYUVOverlay(pDc->width, pDc->height,SDL_YV12_OVERLAY, screen); 
 	SDL_Rect rect;
 	rect.x = 0;    
 	rect.y = 0;    
@@ -359,7 +359,7 @@ int main(int argc, char* argv[])
 #endif  
 
 	struct SwsContext *img_convert_ctx;
-	img_convert_ctx = sws_getContext(Dc->width, Dc->height, Dc->pix_fmt, Dc->width, Dc->height, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
+	img_convert_ctx = sws_getContext(pDc->width, pDc->height, pDc->pix_fmt, pDc->width, pDc->height, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
 	//------------------------------
 	SDL_Thread *video_tid = SDL_CreateThread(sfp_refresh_thread,NULL);
 	//
@@ -381,51 +381,8 @@ int main(int argc, char* argv[])
 			if(av_read_frame(pFormatCtx, pkt)>=0){
 				if(pkt->stream_index==videoindex){
 
-#if 0
-
-					av_init_packet(pkt);
-					pkt->data = NULL;    // packet data will be allocated by the encoder
-					pkt->size = 0;
-					frame->pts = i;
-					/* encode the image 压缩图片 avcodec_encode_video2
-					参数说明：
-					1.c :codec content
-					2.pkt: output AVPacket.
-					3.frame:AVFrame containing the raw video data to be encoded.
-					4. got_output: got_packet_ptr This field is set to 1 by libavcodec if the
-					 * output packet is non-empty, and to 0 if it is empty.
-					*/
-						ret = avcodec_encode_video2(c, pkt, frame, &got_output);
-
-						if (ret < 0)
-						{
-							printf("Error encoding frame\n");
-							exit(1);
-						}
-
-						if (got_output)
-						{
-							SDL_LockYUVOverlay(bmp);
-
-							printf("Write frame %3d (size=%5d)\n", i, pkt->size);
-
-							fwrite(pkt->data, 1, pkt->size, f);
-							fflush(f);
-							av_free_packet(pkt);
-
-							SDL_UnlockYUVOverlay(bmp); 
-							SDL_DisplayYUVOverlay(bmp, &rect);
-						}
-
-						i ++;
-
-
-
-
-#else
-
 					printf("->>>>>>>>>pktnum:%d\n",pktnum++);
-					ret = avcodec_decode_video2(Dc, Dframe, &got_picture, pkt);
+					ret = avcodec_decode_video2(pDc, pDframe, &got_picture, pkt);
 					if(ret < 0){
 						printf("Decode Error.\n");
 						return -1;
@@ -442,13 +399,13 @@ int main(int argc, char* argv[])
 
 					if(got_picture){
 						SDL_LockYUVOverlay(bmp);
-						DFrameYUV->data[0]=bmp->pixels[0];
-						DFrameYUV->data[1]=bmp->pixels[2];
-						DFrameYUV->data[2]=bmp->pixels[1];     
-						DFrameYUV->linesize[0]=bmp->pitches[0];
-						DFrameYUV->linesize[1]=bmp->pitches[2];   
-						DFrameYUV->linesize[2]=bmp->pitches[1];
-						sws_scale(img_convert_ctx, (const uint8_t* const*)Dframe->data, Dframe->linesize, 0, Dc->height, DFrameYUV->data, DFrameYUV->linesize);
+						pDFrameYUV->data[0]=bmp->pixels[0];
+						pDFrameYUV->data[1]=bmp->pixels[2];
+						pDFrameYUV->data[2]=bmp->pixels[1];     
+						pDFrameYUV->linesize[0]=bmp->pitches[0];
+						pDFrameYUV->linesize[1]=bmp->pitches[2];   
+						pDFrameYUV->linesize[2]=bmp->pitches[1];
+						sws_scale(img_convert_ctx, (const uint8_t* const*)pDframe->data, pDframe->linesize, 0, pDc->height, pDFrameYUV->data, pDFrameYUV->linesize);
 //
 //#if OUTPUT_YUV420P  
 //						int y_size=c->width*c->height;    
@@ -457,7 +414,7 @@ int main(int argc, char* argv[])
 //						fwrite(pFrameYUV->data[2],1,y_size/4,fp_yuv);  //V  
 //#endif  
 
-						ret = avcodec_encode_video2(Ec, pkt, DFrameYUV, &got_output);
+						ret = avcodec_encode_video2(pEc, pkt, pDFrameYUV, &got_output);
 
 						if (ret < 0)
 						{
@@ -481,8 +438,6 @@ int main(int argc, char* argv[])
 						SDL_DisplayYUVOverlay(bmp, &rect); 
 
 					}
-
-#endif
 				}
 				av_free_packet(pkt);
 			}else{
@@ -506,12 +461,12 @@ int main(int argc, char* argv[])
 
 	SDL_Quit();
 
-	av_free(Eframe);
-	avcodec_close(Ec);
+	av_free(pEframe);
+	avcodec_close(pEc);
 	//av_free(out_buffer);
-	av_free(DFrameYUV);
-	av_free(Dframe);
-	avcodec_close(Dc);
+	av_free(pDFrameYUV);
+	av_free(pDframe);
+	avcodec_close(pDc);
 	avformat_close_input(&pFormatCtx);
 
 	return 0;
